@@ -1,11 +1,15 @@
 """
-Django settings for otop_project project (Vercel/Production-ready)
+Django settings for otop_project project
 """
 
 from pathlib import Path
 import os
 from decouple import config
 import dj_database_url
+import pymysql
+
+# ใช้ PyMySQL แทน MySQLdb
+pymysql.install_as_MySQLdb()
 
 # -----------------------------
 # BASE DIRECTORY
@@ -13,11 +17,20 @@ import dj_database_url
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # -----------------------------
+# ENVIRONMENT
+# -----------------------------
+ENVIRONMENT = config('ENVIRONMENT', default='local')  # 'local' หรือ 'production'
+
+# -----------------------------
 # SECURITY
 # -----------------------------
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-default')
-DEBUG = config('DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = ["127.0.0.1", "localhost", "0.0.0.0"]
+SECRET_KEY = config('SECRET_KEY', default='your-default-secret-key')
+DEBUG = config('DEBUG', default=(ENVIRONMENT == 'local'), cast=bool)
+
+if ENVIRONMENT == 'production':
+    ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='').split(',')
+else:
+    ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='127.0.0.1,localhost').split(',')
 
 # -----------------------------
 # APPLICATION DEFINITION
@@ -71,12 +84,23 @@ WSGI_APPLICATION = 'otop_project.wsgi.application'
 # -----------------------------
 # DATABASE CONFIGURATION
 # -----------------------------
-DATABASES = {
-    'default': dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",  # fallback local dev
-        conn_max_age=600
-    )
-}
+if ENVIRONMENT == 'production':
+    DATABASES = {
+        'default': dj_database_url.parse(
+            config('DATABASE_URL', default='mysql://root:password@mysql.railway.internal:3306/railway'),
+            conn_max_age=600,
+            engine='django.db.backends.mysql',
+        )
+    }
+else:
+    # local ใช้ SQLite
+    DATABASES = {
+        'default': dj_database_url.parse(
+            config('DATABASE_URL', default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
+            conn_max_age=600,
+            engine='django.db.backends.sqlite3',
+        )
+    }
 
 # -----------------------------
 # PASSWORD VALIDATION
@@ -122,12 +146,12 @@ REST_FRAMEWORK = {
 # -----------------------------
 # CORS
 # -----------------------------
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",   # ถ้า frontend รันบน React/Next.js
-    "http://127.0.0.1:3000",
-    "https://your-frontend.vercel.app",  # ตัวอย่างเวลา deploy frontend จริง
-]
-CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=False, cast=bool)
+if ENVIRONMENT == 'production':
+    CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='').split(',')
+    CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=False, cast=bool)
+else:
+    CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000').split(',')
+    CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=True, cast=bool)
 
 # -----------------------------
 # DEFAULT AUTO FIELD
