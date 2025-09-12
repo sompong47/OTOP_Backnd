@@ -64,8 +64,8 @@ WSGI_APPLICATION = 'otop_project.wsgi.application'
 
 # Database (Vercel จะตั้ง DATABASE_URL ใน environment)
 DATABASES = {
-    'default': dj_database_url.config(
-        default=config('DATABASE_URL')
+    'default': dj_database_url.parse(
+        os.environ.get('DATABASE_URL')
     )
 }
 
