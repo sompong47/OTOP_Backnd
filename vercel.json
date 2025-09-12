@@ -2,14 +2,17 @@
   "version": 2,
   "builds": [
     {
-      "src": "otop_project/asgi.py",
-      "use": "@vercel/python"
+      "src": "otop_project/wsgi.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "50mb"
+      }
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "otop_project/asgi.py"
+      "dest": "otop_project/wsgi.py"
     }
   ]
 }

@@ -7,15 +7,21 @@ import os
 from decouple import config
 import dj_database_url
 
-# Base directory
+# -----------------------------
+# BASE DIRECTORY
+# -----------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# -----------------------------
 # SECURITY
-SECRET_KEY = config('SECRET_KEY')
+# -----------------------------
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-default')
 DEBUG = config('DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='').split(',')  # e.g. "your-vercel-app.vercel.app"
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", "0.0.0.0"]
 
-# Application definition
+# -----------------------------
+# APPLICATION DEFINITION
+# -----------------------------
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -32,14 +38,14 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',  # ต้องมาก่อน CommonMiddleware
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # serve static
+    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
 ROOT_URLCONF = 'otop_project.urls'
@@ -47,12 +53,12 @@ ROOT_URLCONF = 'otop_project.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],  # ถ้ามี template folder ใส่ path ที่นี่
+        'DIRS': [],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.debug',
-                'django.template.context_processors.request',  # ต้องมีสำหรับ drf_yasg
+                'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
             ],
@@ -62,14 +68,19 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'otop_project.wsgi.application'
 
-# Database (Vercel จะตั้ง DATABASE_URL ใน environment)
+# -----------------------------
+# DATABASE CONFIGURATION
+# -----------------------------
 DATABASES = {
-    'default': dj_database_url.parse(
-        os.environ.get('DATABASE_URL')
+    'default': dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",  # fallback local dev
+        conn_max_age=600
     )
 }
 
-# Password validation
+# -----------------------------
+# PASSWORD VALIDATION
+# -----------------------------
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -77,13 +88,17 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-# Internationalization
+# -----------------------------
+# INTERNATIONALIZATION
+# -----------------------------
 LANGUAGE_CODE = 'th'
 TIME_ZONE = 'Asia/Bangkok'
 USE_I18N = True
 USE_TZ = True
 
-# Static & Media
+# -----------------------------
+# STATIC & MEDIA FILES
+# -----------------------------
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
@@ -91,7 +106,9 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# REST Framework
+# -----------------------------
+# REST FRAMEWORK
+# -----------------------------
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.AllowAny'],
     'DEFAULT_RENDERER_CLASSES': ['rest_framework.renderers.JSONRenderer'],
@@ -102,9 +119,17 @@ REST_FRAMEWORK = {
     ],
 }
 
-# CORS (Flutter/Frontend)
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='').split(',')  # e.g. "https://your-frontend.com"
+# -----------------------------
+# CORS
+# -----------------------------
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",   # ถ้า frontend รันบน React/Next.js
+    "http://127.0.0.1:3000",
+    "https://your-frontend.vercel.app",  # ตัวอย่างเวลา deploy frontend จริง
+]
 CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=False, cast=bool)
 
-# Default primary key field type
+# -----------------------------
+# DEFAULT AUTO FIELD
+# -----------------------------
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
