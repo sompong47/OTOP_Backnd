@@ -35,26 +35,33 @@ class CategoryManageView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Category.objects.all()
 
 # ---------- Orders ----------
-@api_view(['POST'])
+@api_view(['GET','POST'])
 def create_order(request):
-    serializer = CreateOrderSerializer(data=request.data)
-    if serializer.is_valid():
-        try:
-            # ตรวจสอบ stock
-            for item in serializer.validated_data['items']:
-                product = get_object_or_404(Product, id=item['product_id'])
-                if product.stock < item['quantity']:
-                    return Response({"error": f"สินค้ามีไม่พอ: {product.name}"}, status=status.HTTP_400_BAD_REQUEST)
-            order = serializer.save()
-            # ลด stock
-            for item in order.items.all():
-                product = item.product
-                product.stock -= item.quantity
-                product.save()
-            return Response({'message':'สั่งซื้อสำเร็จ','order_id':order.id}, status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response({'error':str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
+    if request.method == 'POST':
+        serializer = CreateOrderSerializer(data=request.data)
+        if serializer.is_valid():
+            try:
+                # ตรวจสอบ stock
+                for item in serializer.validated_data['items']:
+                    product = get_object_or_404(Product, id=item['product_id'])
+                    if product.stock < item['quantity']:
+                        return Response({"error": f"สินค้ามีไม่พอ: {product.name}"}, status=status.HTTP_400_BAD_REQUEST)
+                order = serializer.save()
+                # ลด stock
+                for item in order.items.all():
+                    product = item.product
+                    product.stock -= item.quantity
+                    product.save()
+                return Response({'message':'สั่งซื้อสำเร็จ','order_id':order.id}, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                return Response({'error':str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
+    elif request.method == 'GET':
+        if request.user.is_authenticated:
+            orders = Order.objects.filter(customer_email=request.user.email)
+            serializer = OrderSerializer(orders, many=True)
+            return Response(serializer.data)
+        return Response({"error":"กรุณา login ก่อน"}, status=status.HTTP_401_UNAUTHORIZED)
 
 class OrderListView(generics.ListAPIView):
     serializer_class = OrderSerializer
