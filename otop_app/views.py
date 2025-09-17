@@ -1,7 +1,8 @@
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
-from rest_framework import generics, status, filters, serializers
-from rest_framework.decorators import api_view
+from django.db import transaction
+from rest_framework import generics, status, filters
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
@@ -19,49 +20,95 @@ class ProductListView(generics.ListAPIView):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name','description','category__name']
     ordering_fields = ['price','created_at']
+    permission_classes = [AllowAny]
 
 class ProductDetailView(generics.RetrieveAPIView):
     queryset = Product.objects.filter(is_active=True)
     serializer_class = ProductSerializer
+    permission_classes = [AllowAny]
 
 # ---------- Categories ----------
 class CategoryListView(generics.ListAPIView):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
+    permission_classes = [AllowAny]
 
 class CategoryManageView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated]
     queryset = Category.objects.all()
 
-# ---------- Orders ----------
-@api_view(['GET','POST'])
+# ---------- Orders - แก้ไขให้เรียบง่าย ----------
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def create_order(request):
-    if request.method == 'POST':
-        serializer = CreateOrderSerializer(data=request.data)
-        if serializer.is_valid():
-            try:
-                # ตรวจสอบ stock
-                for item in serializer.validated_data['items']:
-                    product = get_object_or_404(Product, id=item['product_id'])
-                    if product.stock < item['quantity']:
-                        return Response({"error": f"สินค้ามีไม่พอ: {product.name}"}, status=status.HTTP_400_BAD_REQUEST)
-                order = serializer.save()
-                # ลด stock
-                for item in order.items.all():
-                    product = item.product
-                    product.stock -= item.quantity
-                    product.save()
-                return Response({'message':'สั่งซื้อสำเร็จ','order_id':order.id}, status=status.HTTP_201_CREATED)
-            except Exception as e:
-                return Response({'error':str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        return Response(serializer.errors,status=status.HTTP_400_BAD_REQUEST)
-    elif request.method == 'GET':
-        if request.user.is_authenticated:
-            orders = Order.objects.filter(customer_email=request.user.email)
-            serializer = OrderSerializer(orders, many=True)
-            return Response(serializer.data)
-        return Response({"error":"กรุณา login ก่อน"}, status=status.HTTP_401_UNAUTHORIZED)
+    """สร้างออร์เดอร์ใหม่"""
+    serializer = CreateOrderSerializer(data=request.data)
+    
+    if not serializer.is_valid():
+        return Response({
+            'success': False,
+            'message': 'ข้อมูลไม่ถูกต้อง',
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        with transaction.atomic():  # ใช้ transaction เพื่อความปลอดภัย
+            # ตรวจสอบ stock ทุกรายการก่อน
+            items_data = serializer.validated_data['items']
+            products_to_update = []
+            
+            for item in items_data:
+                product = get_object_or_404(Product, id=item['product_id'])
+                if product.stock < item['quantity']:
+                    return Response({
+                        'success': False,
+                        'message': f'สินค้า "{product.name}" มีไม่เพียงพอ (เหลือ {product.stock} ชิ้น)'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                products_to_update.append({
+                    'product': product,
+                    'quantity': item['quantity']
+                })
+            
+            # สร้างออร์เดอร์
+            order = serializer.save()
+            
+            # ลด stock
+            for item in products_to_update:
+                product = item['product']
+                product.stock -= item['quantity']
+                product.save()
+            
+            return Response({
+                'success': True,
+                'message': 'สั่งซื้อสำเร็จ',
+                'order_id': order.id,
+                'total_amount': order.total_amount
+            }, status=status.HTTP_201_CREATED)
+            
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'เกิดข้อผิดพลาด: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_orders(request):
+    """ดูรายการออร์เดอร์ของผู้ใช้"""
+    try:
+        orders = Order.objects.filter(customer_email=request.user.email).order_by('-created_at')
+        serializer = OrderSerializer(orders, many=True)
+        return Response({
+            'success': True,
+            'orders': serializer.data
+        })
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'ไม่สามารถดึงข้อมูลได้: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class OrderListView(generics.ListAPIView):
     serializer_class = OrderSerializer
@@ -70,8 +117,8 @@ class OrderListView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         if hasattr(user, 'seller'):
-            return Order.objects.filter(items__product__seller=user.seller).distinct()
-        return Order.objects.filter(customer_email=user.email)
+            return Order.objects.filter(items__product__seller=user.seller).distinct().order_by('-created_at')
+        return Order.objects.filter(customer_email=user.email).order_by('-created_at')
 
 class OrderDetailView(generics.RetrieveAPIView):
     serializer_class = OrderSerializer
@@ -88,21 +135,43 @@ class MyOrderListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Order.objects.filter(customer_email=self.request.user.email)
+        return Order.objects.filter(customer_email=self.request.user.email).order_by('-created_at')
 
 class OrderStatusUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def patch(self, request, pk):
-        order = get_object_or_404(Order, pk=pk)
-        if not hasattr(request.user, 'seller') or not order.items.filter(product__seller=request.user.seller).exists():
-            return Response({'error':'No permission'}, status=403)
-        status_value = request.data.get('status')
-        if status_value not in dict(Order.STATUS_CHOICES):
-            return Response({'error':'Invalid status'}, status=400)
-        order.status = status_value
-        order.save()
-        return Response({'status':'updated'})
+        try:
+            order = get_object_or_404(Order, pk=pk)
+            
+            # ตรวจสอบสิทธิ์
+            if not hasattr(request.user, 'seller') or not order.items.filter(product__seller=request.user.seller).exists():
+                return Response({
+                    'success': False,
+                    'message': 'ไม่มีสิทธิ์แก้ไขออร์เดอร์นี้'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            status_value = request.data.get('status')
+            if status_value not in dict(Order.STATUS_CHOICES):
+                return Response({
+                    'success': False,
+                    'message': 'สถานะไม่ถูกต้อง'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            order.status = status_value
+            order.save()
+            
+            return Response({
+                'success': True,
+                'message': 'อัพเดทสถานะสำเร็จ',
+                'status': status_value
+            })
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'เกิดข้อผิดพลาด: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # ---------- Seller ----------
 class SellerDetailView(generics.RetrieveUpdateAPIView):
@@ -117,7 +186,7 @@ class SellerProductListView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Product.objects.filter(seller__user=self.request.user)
+        return Product.objects.filter(seller__user=self.request.user).order_by('-created_at')
 
     def perform_create(self, serializer):
         seller = get_object_or_404(Seller, user=self.request.user)
@@ -136,12 +205,26 @@ class SellerOrderListView(generics.ListAPIView):
 
     def get_queryset(self):
         seller = get_object_or_404(Seller, user=self.request.user)
-        return Order.objects.filter(items__product__seller=seller).distinct()
+        return Order.objects.filter(items__product__seller=seller).distinct().order_by('-created_at')
 
 # ---------- Register & Profile ----------
 class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
     permission_classes = [AllowAny]
+    
+    def create(self, request, *args, **kwargs):
+        try:
+            response = super().create(request, *args, **kwargs)
+            return Response({
+                'success': True,
+                'message': 'สมัครสมาชิกสำเร็จ',
+                'user': response.data
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'สมัครสมาชิกไม่สำเร็จ: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = UserProfileSerializer
@@ -156,7 +239,21 @@ class ProductReviewListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return ProductReview.objects.filter(product_id=self.kwargs['product_id'])
+        return ProductReview.objects.filter(product_id=self.kwargs['product_id']).order_by('-created_at')
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user, product_id=self.kwargs['product_id'])
+        
+    def create(self, request, *args, **kwargs):
+        try:
+            response = super().create(request, *args, **kwargs)
+            return Response({
+                'success': True,
+                'message': 'เพิ่มรีวิวสำเร็จ',
+                'review': response.data
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'เพิ่มรีวิวไม่สำเร็จ: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
