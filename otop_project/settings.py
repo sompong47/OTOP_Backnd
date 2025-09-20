@@ -25,7 +25,14 @@ DEBUG = config('DEBUG', default=not bool(RAILWAY_ENVIRONMENT), cast=bool)
 if RAILWAY_ENVIRONMENT:
     ALLOWED_HOSTS = ['.railway.app', '.up.railway.app', 'localhost', '127.0.0.1']
 else:
-    ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+    ALLOWED_HOSTS = [
+        '127.0.0.1', 
+        'localhost', 
+        '10.0.2.2',        # Android Emulator
+        '0.0.0.0',         # All interfaces
+        # เพิ่ม IP ของเครื่องคุณถ้าต้องการใช้ physical device
+        # '192.168.1.XXX',   
+    ]
 
 # -----------------------------
 # APPLICATION DEFINITION
