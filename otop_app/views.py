@@ -1,6 +1,8 @@
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from django.db import transaction
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from rest_framework import generics, status, filters
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -12,6 +14,9 @@ from .serializers import (
     CreateOrderSerializer, SellerSerializer, RegisterSerializer, 
     UserProfileSerializer, ProductReviewSerializer
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 # ---------- Products ----------
 class ProductListView(generics.ListAPIView):
@@ -43,9 +48,11 @@ class CategoryManageView(generics.RetrieveUpdateDestroyAPIView):
 @permission_classes([AllowAny])
 def create_order(request):
     """สร้างออร์เดอร์ใหม่"""
+    print(f"Create order request data: {request.data}")
     serializer = CreateOrderSerializer(data=request.data)
     
     if not serializer.is_valid():
+        print(f"Order validation errors: {serializer.errors}")
         return Response({
             'success': False,
             'message': 'ข้อมูลไม่ถูกต้อง',
@@ -88,6 +95,7 @@ def create_order(request):
             }, status=status.HTTP_201_CREATED)
             
     except Exception as e:
+        print(f"Order creation error: {str(e)}")
         return Response({
             'success': False,
             'message': f'เกิดข้อผิดพลาด: {str(e)}'
@@ -208,19 +216,44 @@ class SellerOrderListView(generics.ListAPIView):
         return Order.objects.filter(items__product__seller=seller).distinct().order_by('-created_at')
 
 # ---------- Register & Profile ----------
+@method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
     permission_classes = [AllowAny]
     
     def create(self, request, *args, **kwargs):
+        print(f"📱 Register request headers: {dict(request.headers)}")
+        print(f"📱 Register request data: {request.data}")
+        print(f"📱 Register request content type: {request.content_type}")
+        
         try:
-            response = super().create(request, *args, **kwargs)
+            serializer = self.get_serializer(data=request.data)
+            if not serializer.is_valid():
+                print(f"❌ Register validation errors: {serializer.errors}")
+                return Response({
+                    'success': False,
+                    'message': 'ข้อมูลไม่ถูกต้อง',
+                    'errors': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Create user
+            user = serializer.save()
+            print(f"✅ User created successfully: {user.username}")
+            
             return Response({
                 'success': True,
                 'message': 'สมัครสมาชิกสำเร็จ',
-                'user': response.data
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                }
             }, status=status.HTTP_201_CREATED)
+            
         except Exception as e:
+            print(f"❌ Register error: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return Response({
                 'success': False,
                 'message': f'สมัครสมาชิกไม่สำเร็จ: {str(e)}'

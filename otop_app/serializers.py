@@ -48,6 +48,7 @@ class CreateOrderSerializer(serializers.Serializer):
     items = CreateOrderItemSerializer(many=True)
 
     def create(self, validated_data):
+        print(f"Creating order with validated data: {validated_data}")
         items_data = validated_data.pop('items')
         total_amount = 0
         order_items = []
@@ -65,17 +66,41 @@ class CreateOrderSerializer(serializers.Serializer):
         order = Order.objects.create(total_amount=total_amount, **validated_data)
         for item_data in order_items:
             OrderItem.objects.create(order=order, **item_data)
+        
+        print(f"Order created successfully: {order.id}")
         return order
 
 # ---------------- User ----------------
 class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, required=True)
+    password = serializers.CharField(write_only=True, required=True, min_length=6)
+    
     class Meta:
         model = User
         fields = ['id','username','email','password']
+    
+    def validate_username(self, value):
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError("ชื่อผู้ใช้นี้มีคนใช้แล้ว")
+        return value
+    
+    def validate_email(self, value):
+        if value and User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("อีเมลนี้มีคนใช้แล้ว")
+        return value
+    
     def create(self, validated_data):
-        user = User.objects.create_user(username=validated_data['username'], email=validated_data.get('email',''), password=validated_data['password'])
-        return user
+        print(f"Creating user with validated data: {validated_data}")
+        try:
+            user = User.objects.create_user(
+                username=validated_data['username'], 
+                email=validated_data.get('email', ''), 
+                password=validated_data['password']
+            )
+            print(f"User created successfully: {user.username}")
+            return user
+        except Exception as e:
+            print(f"Error creating user: {e}")
+            raise serializers.ValidationError(f"ไม่สามารถสร้างผู้ใช้ได้: {str(e)}")
 
 class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
