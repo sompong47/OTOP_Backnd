@@ -2,6 +2,7 @@ from django.contrib.auth.models import User
 from rest_framework import serializers
 from .models import Product, Category, Seller, Order, OrderItem, ProductReview
 
+
 # ---------------- Category ----------------
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -16,9 +17,38 @@ class SellerSerializer(serializers.ModelSerializer):
 
 # ---------------- Product ----------------
 class ProductSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    seller_name = serializers.CharField(source='seller.name', read_only=True)
+    
     class Meta:
         model = Product
         fields = '__all__'
+    
+    def to_representation(self, instance):
+        """แปลง output ให้เหมาะกับ Flutter"""
+        data = super().to_representation(instance)
+        
+        # เปลี่ยน category จาก ID เป็น name
+        data['category'] = instance.category.name if instance.category else None
+        
+        # เปลี่ยน seller จาก ID เป็น name  
+        data['seller'] = instance.seller.name if instance.seller else None
+        
+        # แปลง is_active เป็น is_available
+        data['is_available'] = data.pop('is_active', True)
+        
+        # จัดการ image URL - ให้ full URL
+        if instance.image:
+            request = self.context.get('request')
+            if request:
+                data['image'] = request.build_absolute_uri(instance.image.url)
+            else:
+                # Fallback สำหรับกรณีไม่มี request context
+                data['image'] = f"http://127.0.0.1:8000{instance.image.url}" if instance.image.url else None
+        else:
+            data['image'] = None
+            
+        return data
 
 # ---------------- OrderItem ----------------
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -109,6 +139,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 # ---------------- ProductReview ----------------
 class ProductReviewSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.username', read_only=True)
+    
     class Meta:
         model = ProductReview
-        fields = '__all__'
+        fields = ['id', 'user', 'user_name', 'rating', 'comment', 'created_at']
+        read_only_fields = ['user', 'created_at']
