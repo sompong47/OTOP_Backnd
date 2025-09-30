@@ -247,6 +247,6 @@ LOGGING = {
 }
 
 # Debug output
-print(f"🔧 Environment: {'PRODUCTION' if RAILWAY_ENVIRONMENT else 'DEVELOPMENT'}")
-print(f"🛢️  Database: {'PostgreSQL' if RAILWAY_ENVIRONMENT else 'SQLite'}")
-print(f"🌐 CORS Allow All: {not RAILWAY_ENVIRONMENT}")
+print(f"📁 MEDIA_ROOT: {MEDIA_ROOT}")
+print(f"🔗 MEDIA_URL: {MEDIA_URL}")
+print(f"✅ Media folder exists: {MEDIA_ROOT.exists()}")

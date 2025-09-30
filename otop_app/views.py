@@ -43,11 +43,11 @@ class CategoryManageView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
     queryset = Category.objects.all()
 
-# ---------- Orders - แก้ไขให้เรียบง่าย ----------
+# ---------- Orders (เวอร์ชันเดิม) ----------
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def create_order(request):
-    """สร้างออร์เดอร์ใหม่"""
+    """สร้างออร์เดอร์ใหม่ (เวอร์ชันเดิม)"""
     print(f"Create order request data: {request.data}")
     serializer = CreateOrderSerializer(data=request.data)
     
@@ -61,7 +61,6 @@ def create_order(request):
     
     try:
         with transaction.atomic():  # ใช้ transaction เพื่อความปลอดภัย
-            # ตรวจสอบ stock ทุกรายการก่อน
             items_data = serializer.validated_data['items']
             products_to_update = []
             
@@ -101,10 +100,41 @@ def create_order(request):
             'message': f'เกิดข้อผิดพลาด: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+# ---------- Orders (เวอร์ชันใหม่ v2) ----------
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def create_order_v2(request):
+    """สร้างออร์เดอร์ใหม่ (เวอร์ชัน v2 - return order data)"""
+    try:
+        # ตัวอย่างการสร้าง order (คุณต้องปรับให้ตรงกับ model ของคุณเอง)
+        order = Order.objects.create(
+            customer_email=request.data.get('customer_email'),
+            total_amount=request.data.get('total_amount', 0),
+            status='pending'
+        )
+        
+        return Response({
+            'success': True,
+            'message': 'Order created successfully',
+            'data': {
+                'id': order.id,
+                'order_number': getattr(order, 'order_number', None),
+                'status': order.status,
+                'total': str(order.total_amount),
+                # เพิ่ม field อื่นได้ตามต้องการ
+            }
+        }, status=201)
+    
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': str(e)
+        }, status=400)
+
+# ---------- Orders (อื่น ๆ) ----------
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_orders(request):
-    """ดูรายการออร์เดอร์ของผู้ใช้"""
     try:
         orders = Order.objects.filter(customer_email=request.user.email).order_by('-created_at')
         serializer = OrderSerializer(orders, many=True)
@@ -152,7 +182,6 @@ class OrderStatusUpdateView(APIView):
         try:
             order = get_object_or_404(Order, pk=pk)
             
-            # ตรวจสอบสิทธิ์
             if not hasattr(request.user, 'seller') or not order.items.filter(product__seller=request.user.seller).exists():
                 return Response({
                     'success': False,
@@ -182,6 +211,30 @@ class OrderStatusUpdateView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # ---------- Seller ----------
+@api_view(['GET'])
+def seller_dashboard(request):
+    return Response({
+        'success': True,
+        'data': {
+            'today_sales': 1500.0,
+            'sales_growth': 5.2,
+            'new_orders': 12,
+            'pending_orders': 3,
+            'total_products': 25,
+            'low_stock_products': 2,
+            'average_rating': 4.5,
+            'total_reviews': 48,
+            'recent_activities': [
+                {
+                    'type': 'order',
+                    'title': 'คำสั่งซื้อใหม่',
+                    'subtitle': 'มีคำสั่งซื้อใหม่ 3 รายการ',
+                    'time': '5 นาทีที่แล้ว'
+                }
+            ]
+        }
+    })
+
 class SellerDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = SellerSerializer
     permission_classes = [IsAuthenticated]
@@ -236,7 +289,6 @@ class RegisterView(generics.CreateAPIView):
                     'errors': serializer.errors
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Create user
             user = serializer.save()
             print(f"✅ User created successfully: {user.username}")
             
