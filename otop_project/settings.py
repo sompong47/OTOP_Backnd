@@ -6,6 +6,7 @@ from pathlib import Path
 import os
 from decouple import config
 import dj_database_url
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -23,15 +24,20 @@ DEBUG = config('DEBUG', default=not bool(RAILWAY_ENVIRONMENT), cast=bool)
 
 # Allowed hosts
 if RAILWAY_ENVIRONMENT:
-    ALLOWED_HOSTS = ['.railway.app', '.up.railway.app', 'localhost', '127.0.0.1']
+    ALLOWED_HOSTS = [
+        '.railway.app',
+        '.up.railway.app',
+        'otopbacknd-production.up.railway.app',  # ✅ เพิ่มโดเมนจริงของคุณ
+        'localhost',
+        '127.0.0.1'
+    ]
 else:
     ALLOWED_HOSTS = [
-        '127.0.0.1', 
-        'localhost', 
+        '127.0.0.1',
+        'localhost',
         '10.0.2.2',        # Android Emulator
         '0.0.0.0',         # All interfaces
-        # เพิ่ม IP ของเครื่องคุณถ้าต้องการใช้ physical device
-        '192.168.1.129',   
+        '192.168.1.129',   # ตัวอย่าง IP เครือข่ายภายใน
     ]
 
 # -----------------------------
@@ -44,13 +50,13 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+
     # Third party apps
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
     'drf_yasg',
-    
+
     # Local apps
     'otop_app',
 ]
@@ -127,7 +133,7 @@ USE_I18N = True
 USE_TZ = True
 
 # -----------------------------
-# STATIC FILES
+# STATIC & MEDIA FILES
 # -----------------------------
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
@@ -157,8 +163,6 @@ REST_FRAMEWORK = {
 # -----------------------------
 # JWT CONFIGURATION
 # -----------------------------
-from datetime import timedelta
-
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
@@ -171,7 +175,8 @@ SIMPLE_JWT = {
 if RAILWAY_ENVIRONMENT:
     # Production CORS
     CORS_ALLOWED_ORIGINS = [
-        "https://your-frontend.vercel.app",  # แก้เป็น domain จริง
+        "https://otopbacknd-production.up.railway.app",  # ✅ Backend domain
+        "https://your-frontend.vercel.app",             # ✅ Frontend (แก้เป็นของจริง)
     ]
     cors_origins = config('CORS_ALLOWED_ORIGINS', default='').split(',')
     if cors_origins and cors_origins[0]:
@@ -209,6 +214,7 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:8000',
     'http://localhost:8000',
     'http://10.0.2.2:8000',
+    'https://otopbacknd-production.up.railway.app',  # ✅ เพิ่ม production
 ]
 
 # -----------------------------

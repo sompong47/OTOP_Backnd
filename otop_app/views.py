@@ -47,7 +47,7 @@ class CategoryManageView(generics.RetrieveUpdateDestroyAPIView):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def create_order(request):
-    """สร้างออร์เดอร์ใหม่ (เวอร์ชันเดิม)"""
+    """สร้างออร์เดอร์ใหม่"""
     print(f"Create order request data: {request.data}")
     serializer = CreateOrderSerializer(data=request.data)
     
@@ -60,7 +60,7 @@ def create_order(request):
         }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        with transaction.atomic():  # ใช้ transaction เพื่อความปลอดภัย
+        with transaction.atomic():
             items_data = serializer.validated_data['items']
             products_to_update = []
             
@@ -86,11 +86,13 @@ def create_order(request):
                 product.stock -= item['quantity']
                 product.save()
             
+            # Serialize order เพื่อส่งข้อมูลเต็มกลับไป
+            order_serializer = OrderSerializer(order)
+            
             return Response({
                 'success': True,
                 'message': 'สั่งซื้อสำเร็จ',
-                'order_id': order.id,
-                'total_amount': order.total_amount
+                'data': order_serializer.data
             }, status=status.HTTP_201_CREATED)
             
     except Exception as e:
@@ -106,7 +108,6 @@ def create_order(request):
 def create_order_v2(request):
     """สร้างออร์เดอร์ใหม่ (เวอร์ชัน v2 - return order data)"""
     try:
-        # ตัวอย่างการสร้าง order (คุณต้องปรับให้ตรงกับ model ของคุณเอง)
         order = Order.objects.create(
             customer_email=request.data.get('customer_email'),
             total_amount=request.data.get('total_amount', 0),
@@ -121,7 +122,6 @@ def create_order_v2(request):
                 'order_number': getattr(order, 'order_number', None),
                 'status': order.status,
                 'total': str(order.total_amount),
-                # เพิ่ม field อื่นได้ตามต้องการ
             }
         }, status=201)
     
