@@ -27,7 +27,7 @@ if RAILWAY_ENVIRONMENT:
     ALLOWED_HOSTS = [
         '.railway.app',
         '.up.railway.app',
-        'otopbacknd-production.up.railway.app',  # ✅ เพิ่มโดเมนจริงของคุณ
+        'otopbacknd-production.up.railway.app',  # ✅ production domain
         'localhost',
         '127.0.0.1'
     ]
@@ -56,6 +56,10 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'drf_yasg',
+
+    # Cloudinary
+    'cloudinary',
+    'cloudinary_storage',
 
     # Local apps
     'otop_app',
@@ -143,6 +147,24 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # -----------------------------
+# CLOUDINARY CONFIG
+# -----------------------------
+CLOUDINARY_CLOUD_NAME = config('CLOUDINARY_CLOUD_NAME', default='')
+CLOUDINARY_API_KEY = config('CLOUDINARY_API_KEY', default='')
+CLOUDINARY_API_SECRET = config('CLOUDINARY_API_SECRET', default='')
+
+if RAILWAY_ENVIRONMENT:
+    CLOUDINARY_STORAGE = {
+        'CLOUD_NAME': CLOUDINARY_CLOUD_NAME,
+        'API_KEY': CLOUDINARY_API_KEY,
+        'API_SECRET': CLOUDINARY_API_SECRET,
+    }
+    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+else:
+    # Local: เก็บไฟล์ในเครื่อง
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+
+# -----------------------------
 # REST FRAMEWORK
 # -----------------------------
 REST_FRAMEWORK = {
@@ -175,8 +197,8 @@ SIMPLE_JWT = {
 if RAILWAY_ENVIRONMENT:
     # Production CORS
     CORS_ALLOWED_ORIGINS = [
-        "https://otopbacknd-production.up.railway.app",  # ✅ Backend domain
-        "https://your-frontend.vercel.app",             # ✅ Frontend (แก้เป็นของจริง)
+        "https://otopbacknd-production.up.railway.app",  # Backend domain
+        "https://your-frontend.vercel.app",             # Frontend (แก้เป็นของจริง)
     ]
     cors_origins = config('CORS_ALLOWED_ORIGINS', default='').split(',')
     if cors_origins and cors_origins[0]:
@@ -214,7 +236,7 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:8000',
     'http://localhost:8000',
     'http://10.0.2.2:8000',
-    'https://otopbacknd-production.up.railway.app',  # ✅ เพิ่ม production
+    'https://otopbacknd-production.up.railway.app',  # Production
 ]
 
 # -----------------------------
