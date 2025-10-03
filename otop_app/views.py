@@ -15,6 +15,7 @@ from .serializers import (
     UserProfileSerializer, ProductReviewSerializer
 )
 import logging
+import cloudinary.uploader  # ✅ import cloudinary
 
 logger = logging.getLogger(__name__)
 
@@ -242,6 +243,7 @@ class SellerDetailView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return get_object_or_404(Seller, user=self.request.user)
 
+# ---------- Seller Products (แก้ไขให้รองรับ Cloudinary) ----------
 class SellerProductListView(generics.ListCreateAPIView):
     serializer_class = ProductSerializer
     permission_classes = [IsAuthenticated]
@@ -251,7 +253,20 @@ class SellerProductListView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         seller = get_object_or_404(Seller, user=self.request.user)
-        serializer.save(seller=seller)
+
+        # ✅ อัปโหลดรูปไป Cloudinary ก่อน save
+        image_file = self.request.FILES.get('image')
+        if image_file:
+            upload_result = cloudinary.uploader.upload(
+                image_file,
+                folder="products/",
+                use_filename=True,
+                unique_filename=False
+            )
+            image_url = upload_result['secure_url']
+            serializer.save(seller=seller, image=image_url)
+        else:
+            serializer.save(seller=seller)
 
 class ProductManageView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProductSerializer
@@ -259,6 +274,20 @@ class ProductManageView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return Product.objects.filter(seller__user=self.request.user)
+
+    def perform_update(self, serializer):
+        image_file = self.request.FILES.get('image')
+        if image_file:
+            upload_result = cloudinary.uploader.upload(
+                image_file,
+                folder="products/",
+                use_filename=True,
+                unique_filename=False
+            )
+            image_url = upload_result['secure_url']
+            serializer.save(image=image_url)
+        else:
+            serializer.save()
 
 class SellerOrderListView(generics.ListAPIView):
     serializer_class = OrderSerializer
